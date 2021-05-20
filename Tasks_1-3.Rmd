@@ -9,7 +9,9 @@ output: pdf_document
 
 ```{r}
 install.packages('quantmod') 
-library(quantmod) 
+install.packages('magick')
+library(quantmod)
+library(magick)
 ```
 
 # (1) Download major active stocks of your choice.
@@ -23,8 +25,8 @@ old_stocks$CTL = NULL; old_stocks$IMMU = NULL; old_stocks$NBL = NULL;
 # And let's pick just 5 of these stocks, for simplicity
 old_stocks = old_stocks[,1:6]
 m = length(colnames(old_stocks))-1
-start_date = "2020/05/20"
-end_date = "2021/05/20"
+start_date = "2020-05-20"
+end_date = "2021-05-20"
 stock_names = colnames(old_stocks)[1:m+1]
 stocks = lapply(stock_names, function(x) {getSymbols(x, 
                                                      from = start_date, 
@@ -97,7 +99,116 @@ for(stock_name in stock_names){
   qqline(return_log, col = "blue", lwd = 2)
 }
 ```
+
+It appears as though for most stocks, sample and theoretical quantiles tend to deviate at the tails. In particular, the Q-Q plots for `AAPL`'s, `C`'s, and `CCL`'s log returns suggest heavy-tailed distributions, ie. the histograms of said log returns extend much farther than we usually see in a normal distribution. Perhaps this means that these companies severely outperform or severely underperform more often than we would reasonably expect, were their log returns indeed normally distributed.
+
 # (3) use animation to show the correlation and partial correlation matrices as a function of the time window.
+
+```{r}
+create_gif = function(folder, filename) {
+  # list file names and read in
+  imgs = list.files(folder, full.names = TRUE)
+  img_list = lapply(imgs, image_read)
+  # join the images together
+  img_joined = image_join(img_list)
+  # animate at 2 frames per second
+  img_animated = image_animate(img_joined, fps = 2)
+  # view animated image
+  img_animated
+  # save to disk
+  image_write(image = img_animated,
+              path = filename)
+}
+animation = function(X3, start_date=NA, end_date=NA, stock_names=NA, dates=NA, folder="correlations", filename="heatmaps.jpeg", show_annotations=TRUE, cex=0.5) {
+  data = NA
+  if (!is.na(start_date) & !is.na(end_date) & !any(is.na(dates))) {
+    start_date_i = match(start_date, dates)
+    end_date_i = match(end_date, dates)
+    data = X3[start_date_i:end_date_i,]
+  } else {
+    data = X3
+  }
+  # Partial correlation
+  ns = dim(data)[2]
+  R = cor(data)
+  ER=eigen(R,symmetric=T)
+	D=ER$values
+	P=ER$vectors
+	D[D>0]=1/D[D>0]
+	D[D==0]=0
+	iR=P%*%diag(D,ns,ns)%*%t(P)
+	parR=matrix(NA,ns,ns)
+	for(i in 1:ns)
+	for(j in 1:ns)
+	parR[i,j]=-iR[i,j]/sqrt(iR[i,i]*iR[j,j])
+	diag(parR)=1
+  # Correlation
+  R = cor(data)
+  # Create file
+  path = paste(folder, "/", filename, sep="")
+  jpeg(path, width=3000, height=1500)
+  # Needs large screen
+  par(mfrow=c(1,2),mar=c(0,1,2,1))
+  # Colors
+  cl=c("deepskyblue","lightblue","green","yellow","red")
+  # Save heatmaps to file
+  image(1:ns,1:ns,breaks=c(-.75,-.5,0,.5,.75,1),ylim=c(-4,ns+1),xlim=c(-2,ns+.5),col=cl,ylab="",xlab="",axes=F,R)	
+  text(1:ns,rep(0.5,ns),stock_names,adj=1,cex=1.5*cex,srt=45)
+  text(rep(.3,ns),1:ns,stock_names,adj=1,cex=1.5*cex)
+  if (show_annotations) {
+    for(i in 1:ns)
+    for(j in 1:ns)
+    text(i,j,round(R[i,j],2),cex=cex)
+  }
+  mtext(side=3,paste("Correlation heatmap of",ns,"stocks from",start_date,"to",end_date),cex=2) 
+  image(1:ns,1:ns,breaks=c(-.75,-.5,0,.5,.75,1),ylim=c(-4,ns+1),xlim=c(-2,ns+.5),xlab="",ylab="",axes=F,col=cl,parR)	
+  text(1:ns,rep(0.5,ns),stock_names,adj=1,cex=1.5*cex,srt=45)
+  text(rep(.3,ns),1:ns,stock_names,adj=1,cex=1.5*cex)
+  if (show_annotations) {
+    for(i in 1:ns)
+    for(j in 1:ns)
+    text(i,j,round(parR[i,j],2),cex=cex,font=2)
+  }
+  mtext(side=3,paste("Partial correlation heatmap of",ns,"stocks from",start_date,"to",end_date),cex=1.75) 
+  dev.off()
+}
+```
+
+```{r}
+dates = rownames(stocks_returns_on_log_scale)
+match("2020-07-20", dates)
+```
+
+```{r}
+start_date_from = "2020-05-21"
+start_date_to = "2020-07-20"
+end_date = "2021-05-19"
+folder = "./correlations"
+show_annotations = TRUE
+cex = 2
+dir.create(folder, showWarnings = FALSE)
+dates = rownames(stocks_returns_on_log_scale)
+start_date_from_i = match(start_date_from, dates)
+start_date_to_i = match(start_date_to, dates)
+end_date_i = match(end_date, dates)
+stocks_returns_on_log_scale_matrix = data.matrix(stocks_returns_on_log_scale)
+# Create directory of images for animation
+for (start_date_i in start_date_from_i:start_date_to_i){
+  start_date = dates[start_date_i]
+  filename = paste(start_date, ".jpg", sep="")
+  animation(stocks_returns_on_log_scale_matrix, 
+            start_date=start_date, end_date=end_date, 
+            stock_names=stock_names, dates=dates, 
+            folder=folder, filename=filename, 
+            show_annotations=show_annotations, cex=cex)
+}
+```
+
+```{r}
+# Create animation
+filename = "./correlations_and_partial_correlations.gif"
+create_gif(folder, filename)
+```
 
 # (4) apply dynamic/animation PCA projection onto plane to show stock configuration.
 # (5) apply the multivariate version of optimal portfolio (see my paper MangementAssProb.pdf).
