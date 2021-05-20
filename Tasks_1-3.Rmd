@@ -1,0 +1,104 @@
+---
+title: "Tasks 1-3"
+author: "Aadil Islam"
+date: "6/1/2021"
+output: pdf_document
+---
+
+# Optimal portfolio allocation: Section 3.8 and real stock analysis. Team: Aadil, Judith, Shengsong, Rylan. Tasks: (1) Download major active stocks of your choice, (2) using q-q plot verify that returns on the log scale follow normal distribution, (3) use animation to show the correlation and partial correlation matrices as a function of the time window, (4) apply dynamic/animation PCA projection onto plane to show stock configuration, (5) apply the multivariate version of optimal portfolio (see my paper MangementAssProb.pdf), (6) apply autoregression  and cross-autoregression to predict stock price on the log scale.
+
+```{r}
+install.packages('quantmod') 
+library(quantmod) 
+```
+
+# (1) Download major active stocks of your choice.
+
+Recall from HW4 that we used `Most_active_stocks_prices.csv`. For consistency, let us obtain the latest stock prices for each of the stocks in that csv file, since, say, last year. For each stock, we will obtain the adjusted closing price because it amends a stock's closing price to reflect that stock's value after accounting for any corporate actions,
+
+```{r}
+old_stocks = read.csv(file='data/Most_active_stocks_prices.csv')
+# Let's remove certain stocks as they cannot be looked up on Yahoo Finance
+old_stocks$CTL = NULL; old_stocks$IMMU = NULL; old_stocks$NBL = NULL; 
+# And let's pick just 5 of these stocks, for simplicity
+old_stocks = old_stocks[,1:6]
+m = length(colnames(old_stocks))-1
+start_date = "2020/05/20"
+end_date = "2021/05/20"
+stock_names = colnames(old_stocks)[1:m+1]
+stocks = lapply(stock_names, function(x) {getSymbols(x, 
+                                                     from = start_date, 
+                                                     to = end_date,
+                                                     periodicity = "daily",
+                                                     auto.assign=FALSE)} )
+names(stocks) = stock_names
+stocks_adjusted = lapply(stocks, Ad)
+stocks_adjusted = do.call(merge, stocks_adjusted)
+names(stocks_adjusted) = stock_names
+stocks_adjusted = as.data.frame(stocks_adjusted)
+# Let's see how the adjusted closing prices look
+head(stocks_adjusted)
+```
+
+* `AAPL`
+  + The company does a good job penetrating into emerging markets and making its current customers buy into said markets. This has made its iPhone business particularly successful. The iPhone and iOS operating system leads the industry in security, customer loyalty, ease-of-use, suggesting good long-term customer retention. The company has been at the forefront of innovation in recent years (eg. Apple Pay, Apple Watch, Apple TV, AirPods). These products most importantly help the company retain its iPhone users.
+  + The company's premium pricing strategies may potentially limit its sales growth, as its products may be too expensive for many consumers. Should the company have slight flaws or bugs in its products, it risks losing its reputation of making luxury products. Its status in artificial intelligence development is notably behind competitors like Google and Amazon, which may hurt its ability to produce premium products and services in the future.
+  + Overall, I learned that we should expect steady (perhaps increasing) returns from `AAPL` in the short-run, and most likely increasing returns in the long-run.
+* `TSLA`
+  + The firm possesses immense potential in terms of shaping the markets for electric vehicles, battery technologies, and autonomous vehicles. There is a cost advantage in recharging cars as opposed to refueling with gasoline, suggesting its business model may be profitable long-term. Its products, namely electric cars, impress car enthusiasts and amateurs alike due to availability of instant torque and their technological prowess. The company's extensive supercharger network makes a new customer's transition from gas to electric vehicles much easier.
+  + The firm's business model suffers from uncertainty. Expectations for the stock are incredibly high, making even slight under-performances potential triggers for rapid decline in its stock price. Its CEO, Elon Musk, while an innovative visionary, is a source for skepticism due to his personality. The switch from gas to electric in vehicles around the world is estimated to take years to become a reality, much longer than the company's own projections. Competitors have begun production of electric vehicles themselves.
+  + Overall, I learned to expect somewhat erratic returns from `TSLA` in the short-run. I am unsure what kind of returns to expect in the long-run, but likely either sky-rocketing or plummeting at some point.
+* `GE`
+  + Due to the ongoing pandemic, the company's conservative profits may not be representative of its potential; in particular, we await aerospace to recover. The firm's CFM International venture may prove to benefit its high-margin aftermarket business. Its CEO, Larry Culp, has notably restructured the company's leadership to fit a more future-oriented company vision. 
+  + The firm suffers from uncertainty due to the ongoing pandemic, which has hurt commercial aerospace tremendously. The company's negative earnings across both renewables and power is quite concerning.
+  + Overall, I expect negative returns from `GE` in the short-run. Depending on the state of the pandemic, we may expect negative returns or perhaps a slow retreat back to pre-pandemic conditions in the long-run.
+* `C`
+  + A strong economy, higher inflation, and potentially higher rates are all positives for the banking sector and should propel results even higher. The company is leveraged to the rise of Asia, Latin America, and other emerging markets, while its competitors may struggle with lackluster loan demand in the U.S. and Western Europe. The firm still has room for self-help, particularly around better optimizing current operations, and room to release excess capital, both levers to improve returns.
+  + COVID-19 will be devastating for the economy and likely devastating for the banks; there is no way to know for sure how hard the banks will get hit or how bad things might get. The company may be too big for anyone to manage successfully, the bank has history of culture and risk issues, and many parts of the business don't seem to fit that well together. The company will have permanently lower returns on equity than peers. The firm has a long history of disappointing shareholders; it can be difficult to tell when this will stop.
+* `CCL`
+  + If the CDC lifts its domestic conditional sail order, passenger counts and yields could rise at a faster pace than we currently anticipate. Low fuel prices could help benefit the cost structure to a greater degree than initially expected, thanks to company's floating energy prices (no hedging), once sailings resume. The nascent Asia-Pacific market should remain promising post-COVID-19, as the four largest operators had capacity for nearly 4 million passengers in 2020, which provides an opportunity for long-term growth with a new consumer.”
+  + The media obtaining negative experience commentary regarding cruise incidents could weigh on firm's brand image and pricing leverage, making new cruisers hesitant to try cruising. A decrease in new cruisers leads to fewer repeat cruisers. Higher commodity prices, particularly in energy, could affect profitability, especially as firms maintain compliance with IMO 2020 guidelines. COVID-19 headwinds could persist longer than expected and extended no-sail orders could further pressure profits, leading to added liquidity concerns as secular demand languishes.
+
+# (2) using q-q plot verify that returns on the log scale follow normal distribution.
+
+We now compute the returns for each stock on the log scale,
+
+```{r}
+n = dim(stocks_adjusted)[1]
+# Compute for each stock
+for(stock_name in stock_names){
+  stock_return_tag = paste(stock_name, '_return', sep='')
+  stock_return_log_tag = paste(stock_return_tag, '_log', sep='')
+  stocks_adjusted[stock_return_tag] = c(NA, (stocks_adjusted[stock_name][,1][2:n] - stocks_adjusted[stock_name][,1][1:n-1])/stocks_adjusted[stock_name][,1][1:n-1])
+  stocks_adjusted[stock_return_log_tag] = c(NA, log(stocks_adjusted[stock_name][,1][2:n]) - log(stocks_adjusted[stock_name][,1][1:n-1]))
+}
+# Store
+stocks_returns_on_log_scale = stocks_adjusted[paste(stock_names, '_return_log', sep='')][2:n,]
+# Display
+head(stocks_returns_on_log_scale)
+```
+
+```{r}
+# Compute for each stock
+for(stock_name in stock_names){
+  par(mfrow=c(1,2))
+  stock_return_tag = paste(stock_name, '_return', sep='')
+  stock_return_log_tag = paste(stock_return_tag, '_log', sep='')
+  return_log = stocks_returns_on_log_scale[stock_return_log_tag][,1]
+  # Display histogram
+  hist(return_log, freq=FALSE,
+       main=paste("Histogram for", stock_return_log_tag), 
+       xlab=stock_return_log_tag, cex.main=0.75)
+  lines(density(return_log), col="red", lwd=2)
+  # Display q-q plot
+  qqnorm(return_log, pch = 1, frame = FALSE,
+         main=paste("Normal Q-Q Plot for", stock_return_log_tag),
+         cex.main=0.75)
+  qqline(return_log, col = "blue", lwd = 2)
+}
+```
+# (3) use animation to show the correlation and partial correlation matrices as a function of the time window.
+
+# (4) apply dynamic/animation PCA projection onto plane to show stock configuration.
+# (5) apply the multivariate version of optimal portfolio (see my paper MangementAssProb.pdf).
+# (6) apply autoregression  and cross-autoregression to predict stock price on the log scale.
