@@ -25,6 +25,13 @@ library(stats)
 Recall from HW4 that we used `Most_active_stocks_prices.csv` to harness data for certain stocks. Let us obtain the latest stock prices for each of the stocks in the S&P 500 since, say, 5 years ago. Let us scrape the web for stocks in the S&P 500 by sector. Then for each stock in the S&P 500, we obtain the adjusted closing price because it amends a stock's closing price to reflect that stock's value after accounting for any corporate actions,
 
 ```{r}
+# Imports
+install.packages('quantmod') 
+install.packages('rvest')
+install.packages('tidyverse')
+library(quantmod)
+library(rvest)
+library(tidyverse)
 # Web-scrape SP500 stock list
 sp_500 = read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies") %>%
     html_node("table.wikitable") %>%
@@ -74,7 +81,7 @@ colnames(stocks_adjusted) = gsub("\\.", "-", colnames(stocks_adjusted))
 
 ```{r}
 # Display stock data
-head(stocks_adjusted)
+stocks_adjusted
 ```
 
 Great! Let us do some market analysis on a select 5 companies, as it would be unfeasible to do so for all S&P 500 companies. By doing market analysis, perhaps it will help us intuit our subsequent results on these 5 interesting companies.
@@ -100,7 +107,7 @@ Great! Let us do some market analysis on a select 5 companies, as it would be un
 
 # (2) using q-q plot verify that returns on the log scale follow normal distribution.
 
-We now compute the returns for each stock on the log scale,
+We want to verify that returns for each stock on the log scale follow a normal distribution. To do so, we construct Q-Q plot for each of our 5 selected stocks, comparing their empirical quantiles to the theoretical quantiles for the standard normal distribution,
 
 ```{r}
 n = dim(stocks_adjusted)[1]
@@ -114,7 +121,7 @@ for(stock_name in stock_names){
 # Store
 stocks_returns_on_log_scale = stocks_adjusted[paste(stock_names, '_return_log', sep='')][2:n,]
 # Display
-head(stocks_returns_on_log_scale)
+stocks_returns_on_log_scale
 ```
 
 ```{r}
@@ -130,6 +137,8 @@ for(stock_name in stock_picks){
        main=paste("Histogram for", stock_return_log_tag), 
        xlab=stock_return_log_tag, cex.main=0.75)
   lines(density(return_log), col="red", lwd=2)
+  legend('topleft', lwd=2, cex=0.7, col="red",
+         legend="PDF")
   # Display q-q plot
   qqnorm(return_log, pch = 1, frame = FALSE,
          main=paste("Normal Q-Q Plot for", stock_return_log_tag),
@@ -138,7 +147,7 @@ for(stock_name in stock_picks){
 }
 ```
 
-It appears as though for most stocks, sample and theoretical quantiles tend to deviate at the tails. In particular, the Q-Q plots for `AAPL`'s, `C`'s, and `CCL`'s log returns suggest heavy-tailed distributions, ie. the histograms of said log returns extend much farther than we usually see in a normal distribution. Perhaps this means that these companies severely outperform or severely underperform more often than we would reasonably expect, were their log returns indeed normally distributed.
+It appears as though for most stocks, sample and theoretical quantiles tend to deviate at the tails. In particular, Q-Q plots for `AAPL`, `C`, and `CCL` suggest heavy-tailed distributions, ie. the distributions extend further in the positive and negative directions than we would usually observe in a normal distribution. Perhaps this means that these companies severely outperform or severely underperform more often than we would reasonably expect were their log returns indeed normally distributed.
 
 # (3) use animation to show the correlation and partial correlation matrices as a function of the time window.
 
@@ -214,15 +223,15 @@ animation = function(X3, start_date=NA, end_date=NA, stock_names=NA, dates=NA, f
 
 ```{r}
 dates = rownames(stocks_returns_on_log_scale)
-match("2020-07-20", dates)
+match("2020-05-01", dates)
 ```
 
 ```{r}
 # Compute for only these 5 stocks
 stock_picks = c("AAPL", "TSLA", "GE", "C", "CCL")
-start_date_from = "2020-05-21"
-start_date_to = "2020-07-20"
-end_date = "2021-05-19"
+start_date_from = "2020-01-02"
+start_date_to = "2020-05-01"
+end_date = "2021-05-21"
 folder = "./correlations"
 show_annotations = TRUE
 cex = 2
@@ -251,11 +260,6 @@ create_gif(folder, filename)
 ```
 
 # (4) apply dynamic/animation PCA projection onto plane to show stock configuration.
-
-```{r}
-stocks_adjusted = read.csv(paste("./stocks_adjusted_SP500_", start_date, "_", end_date, ".csv", sep=""), row.names=1)
-colnames(stocks_adjusted) = gsub("\\.", "-", colnames(stocks_adjusted))
-```
 
 ```{r}
 # Fill in missing values as most recent value.
